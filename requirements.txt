@@ -2,3 +2,5 @@ flask
 gunicorn
 python-docx
 werkzeug
+mammoth
+
