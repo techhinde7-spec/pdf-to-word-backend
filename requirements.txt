@@ -1,2 +1,4 @@
 flask
-mammoth
+gunicorn
+python-docx
+werkzeug
