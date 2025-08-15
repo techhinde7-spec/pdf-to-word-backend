@@ -1,2 +1,8 @@
-Flask==3.0.3
-gunicorn==23.0.0
+flask
+flask-cors
+werkzeug
+gunicorn
+pypdf2
+python-docx
+
+
