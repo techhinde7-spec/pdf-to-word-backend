@@ -1,4 +1,6 @@
-flask
-flask-cors
-pdf2docx
+Flask
+PyMuPDF
+pytesseract
+Pillow
+python-docx
 gunicorn
