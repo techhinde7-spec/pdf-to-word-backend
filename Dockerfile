@@ -1,28 +1,27 @@
-# Base image
 FROM python:3.10-slim
 
-# Install LibreOffice and dependencies
+# Install LibreOffice with all filters + Java for some conversions
 RUN apt-get update && apt-get install -y \
     libreoffice \
     libreoffice-writer \
-    libreoffice-core \
-    libreoffice-common \
+    libreoffice-calc \
+    libreoffice-impress \
     default-jre \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    fonts-dejavu \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set work directory
+# Set working directory
 WORKDIR /app
 
-# Copy requirements and install Python deps
-COPY requirements.txt .
+# Copy requirements first
+COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
-COPY . .
+# Copy application files
+COPY . /app
 
 # Expose port
-EXPOSE 10000
+EXPOSE 5000
 
-# Start the server
-CMD ["gunicorn", "--bind", "0.0.0.0:10000", "app:app"]
+# Start Flask
+CMD ["python", "app.py"]
