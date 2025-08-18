@@ -1,7 +1,7 @@
 # Use Python base image
 FROM python:3.11-slim
 
-# Install system dependencies (LibreOffice + fonts + wget for debugging)
+# Install LibreOffice + dependencies
 RUN apt-get update && apt-get install -y \
     libreoffice \
     libreoffice-writer \
@@ -10,20 +10,18 @@ RUN apt-get update && apt-get install -y \
     fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 
-# Set work directory
+# Set working dir
 WORKDIR /app
 
-# Copy requirements
+# Copy requirements & install
 COPY requirements.txt .
-
-# Install Python deps
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
+# Copy code
 COPY . .
 
-# Render requires listening on 0.0.0.0:$PORT
+# Expose Render PORT
 ENV PORT=10000
 
-# Command to run Flask
+# Run Flask
 CMD ["python", "app.py"]
