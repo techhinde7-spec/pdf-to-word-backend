@@ -1,53 +1,64 @@
-from flask import Flask, request, send_file, jsonify
-from flask_cors import CORS
 import os
 import subprocess
-import tempfile
 import uuid
+from flask import Flask, request, send_file, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # allow all origins
+CORS(app)
+
+UPLOAD_FOLDER = "/tmp/uploads"
+OUTPUT_FOLDER = "/tmp/outputs"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 @app.route("/")
 def home():
-    return jsonify({"status": "running"})
+    return "✅ PDF to Word Converter Backend is running!"
 
 @app.route("/convert", methods=["POST"])
-def convert():
+def convert_pdf():
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
-    uploaded_file = request.files["file"]
-    if uploaded_file.filename == "":
+    file = request.files["file"]
+    if file.filename == "":
         return jsonify({"error": "Empty filename"}), 400
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_path = os.path.join(tmpdir, uploaded_file.filename)
-        uploaded_file.save(input_path)
+    # Save uploaded file
+    input_path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4()}.pdf")
+    file.save(input_path)
 
-        output_ext = ".docx" if input_path.endswith(".pdf") else ".pdf"
-        output_path = os.path.join(tmpdir, str(uuid.uuid4()) + output_ext)
+    # Generate output path
+    output_filename = f"{uuid.uuid4()}.docx"
+    output_path = os.path.join(OUTPUT_FOLDER, output_filename)
 
-        # Use LibreOffice CLI for conversion
-        try:
-            subprocess.run([
-                "libreoffice", "--headless", "--convert-to",
-                "docx" if output_ext == ".docx" else "pdf",
-                "--outdir", tmpdir, input_path
-            ], check=True)
-        except subprocess.CalledProcessError as e:
-            return jsonify({"error": "Conversion failed", "details": str(e)}), 500
+    try:
+        # Run LibreOffice conversion
+        subprocess.run([
+            "libreoffice", "--headless", "--convert-to", "docx", "--outdir",
+            OUTPUT_FOLDER, input_path
+        ], check=True)
 
-        if not os.path.exists(output_path):
-            # try to guess filename (LibreOffice sometimes renames it)
-            for f in os.listdir(tmpdir):
-                if f.endswith(output_ext):
-                    output_path = os.path.join(tmpdir, f)
-                    break
+        # Find converted file (LibreOffice keeps same base name)
+        converted_path = os.path.join(
+            OUTPUT_FOLDER,
+            os.path.splitext(os.path.basename(input_path))[0] + ".docx"
+        )
 
-        return send_file(output_path, as_attachment=True)
-        if __name__ == "__main__":
-    import os
+        if not os.path.exists(converted_path):
+            return jsonify({"error": "Conversion failed"}), 500
+
+        return send_file(
+            converted_path,
+            mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            as_attachment=True,
+            download_name="converted.docx"
+        )
+
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": f"Conversion failed: {str(e)}"}), 500
+
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
