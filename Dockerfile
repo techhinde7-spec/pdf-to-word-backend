@@ -1,18 +1,20 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-# Install LibreOffice + required tools
-RUN apt-get update && apt-get install -y libreoffice libreoffice-writer libreoffice-core && apt-get clean
+# Install pandoc + LaTeX for PDF output
+RUN apt-get update && apt-get install -y \
+    pandoc \
+    texlive-xetex \
+    texlive-fonts-recommended \
+    texlive-plain-generic \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements
-COPY requirements.txt /app/
+# Copy files
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy app
-COPY app.py /app/
+COPY . .
 
 EXPOSE 5000
-
 CMD ["python", "app.py"]
