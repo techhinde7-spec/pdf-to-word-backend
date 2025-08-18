@@ -1,45 +1,55 @@
-from flask import Flask, request, send_file
 import os
-import subprocess
 import uuid
+from flask import Flask, request, send_file, jsonify
+from flask_cors import CORS
+from pdf2docx import Converter
+import pypandoc
 
 app = Flask(__name__)
+CORS(app)
 
-UPLOAD_FOLDER = "uploads"
-OUTPUT_FOLDER = "outputs"
+UPLOAD_FOLDER = "/tmp/uploads"
+OUTPUT_FOLDER = "/tmp/outputs"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-@app.route("/convert", methods=["POST"])
-def convert_pdf_to_word():
-    if "file" not in request.files:
-        return {"error": "No file provided"}, 400
-    
-    file = request.files["file"]
-    if file.filename == "":
-        return {"error": "No file selected"}, 400
+@app.route("/")
+def home():
+    return "PDF ⇆ Word Converter API Running!"
 
-    # Save PDF
+@app.route("/convert", methods=["POST"])
+def convert_file():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["file"]
+    filename = file.filename
+    ext = filename.split(".")[-1].lower()
     file_id = str(uuid.uuid4())
-    input_path = os.path.join(UPLOAD_FOLDER, f"{file_id}.pdf")
-    output_path = os.path.join(OUTPUT_FOLDER, f"{file_id}.docx")
+
+    input_path = os.path.join(UPLOAD_FOLDER, f"{file_id}.{ext}")
     file.save(input_path)
 
-    # Run LibreOffice conversion
-    subprocess.run([
-        "libreoffice",
-        "--headless",
-        "--convert-to", "docx",
-        "--outdir", OUTPUT_FOLDER,
-        input_path
-    ])
+    try:
+        # PDF → DOCX
+        if ext == "pdf":
+            output_path = os.path.join(OUTPUT_FOLDER, f"{file_id}.docx")
+            cv = Converter(input_path)
+            cv.convert(output_path, start=0, end=None)
+            cv.close()
+            return send_file(output_path, as_attachment=True)
 
-    # Send the converted file
-    if os.path.exists(output_path):
-        return send_file(output_path, as_attachment=True)
-    else:
-        return {"error": "Conversion failed"}, 500
+        # DOCX → PDF
+        elif ext == "docx":
+            output_path = os.path.join(OUTPUT_FOLDER, f"{file_id}.pdf")
+            pypandoc.convert_file(input_path, "pdf", outputfile=output_path)
+            return send_file(output_path, as_attachment=True)
+
+        else:
+            return jsonify({"error": "Only PDF or DOCX supported"}), 400
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
