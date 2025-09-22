@@ -1,27 +1,24 @@
-# Use Python base image
+# Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
-# Install LibreOffice + dependencies
-RUN apt-get update && apt-get install -y \
-    libreoffice \
-    libreoffice-writer \
-    libreoffice-calc \
-    libreoffice-impress \
-    fonts-dejavu \
-    && rm -rf /var/lib/apt/lists/*
+# Install system deps required by PyMuPDF (mupdf) and pdf2docx if any
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libmupdf-dev \
+    libmagic1 \
+  && rm -rf /var/lib/apt/lists/*
 
-# Set working dir
+# Create app directory
 WORKDIR /app
 
 # Copy requirements & install
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy code
-COPY . .
+# Copy app
+COPY app.py .
 
-# Expose Render PORT
-ENV PORT=10000
-
-# Run Flask
+# Expose port and run
+ENV PORT 5000
+EXPOSE 5000
 CMD ["python", "app.py"]
