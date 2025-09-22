@@ -1,64 +1,45 @@
+# app.py
 import os
-import subprocess
-import uuid
-from flask import Flask, request, send_file, jsonify
-from flask_cors import CORS
+import tempfile
+from flask import Flask, request, send_file, abort, jsonify
+from pdf2docx import Converter  # pip install pdf2docx
 
 app = Flask(__name__)
-CORS(app)
-
-UPLOAD_FOLDER = "/tmp/uploads"
-OUTPUT_FOLDER = "/tmp/outputs"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 @app.route("/")
-def home():
-    return "✅ PDF to Word Converter Backend is running!"
+def index():
+    return "PDF → DOCX converter. POST to /convert/pdf-to-docx with form field 'file'."
 
-@app.route("/convert", methods=["POST"])
-def convert_pdf():
-    if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+@app.route("/convert/pdf-to-docx", methods=["POST"])
+def pdf_to_docx():
+    if 'file' not in request.files:
+        return jsonify({"error": "missing file"}), 400
 
-    file = request.files["file"]
-    if file.filename == "":
-        return jsonify({"error": "Empty filename"}), 400
+    f = request.files['file']
+    filename = f.filename or "upload.pdf"
+    name, ext = os.path.splitext(filename)
+    if ext.lower() not in ['.pdf']:
+        return jsonify({"error": "only .pdf allowed"}), 400
 
-    # Save uploaded file
-    input_path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4()}.pdf")
-    file.save(input_path)
+    # create temp files
+    with tempfile.TemporaryDirectory() as tmp:
+        in_path = os.path.join(tmp, "input.pdf")
+        out_path = os.path.join(tmp, "output.docx")
+        f.save(in_path)
 
-    # Generate output path
-    output_filename = f"{uuid.uuid4()}.docx"
-    output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+        try:
+            # convert using pdf2docx
+            cv = Converter(in_path)
+            # You can pass start and end page if desired: cv.convert(out_path, start=0, end=2)
+            cv.convert(out_path, start=0, end=None)
+            cv.close()
+        except Exception as e:
+            return jsonify({"error": "conversion_failed", "message": str(e)}), 500
 
-    try:
-        # Run LibreOffice conversion
-        subprocess.run([
-            "libreoffice", "--headless", "--convert-to", "docx", "--outdir",
-            OUTPUT_FOLDER, input_path
-        ], check=True)
+        if not os.path.exists(out_path):
+            return jsonify({"error": "conversion_failed", "message": "output missing"}), 500
 
-        # Find converted file (LibreOffice keeps same base name)
-        converted_path = os.path.join(
-            OUTPUT_FOLDER,
-            os.path.splitext(os.path.basename(input_path))[0] + ".docx"
-        )
-
-        if not os.path.exists(converted_path):
-            return jsonify({"error": "Conversion failed"}), 500
-
-        return send_file(
-            converted_path,
-            mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            as_attachment=True,
-            download_name="converted.docx"
-        )
-
-    except subprocess.CalledProcessError as e:
-        return jsonify({"error": f"Conversion failed: {str(e)}"}), 500
+        return send_file(out_path, as_attachment=True, download_name=f"{name}.docx")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
